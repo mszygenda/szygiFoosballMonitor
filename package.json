@@ -12,6 +12,6 @@
     "lodash": "4.17.11"
   },
   "scripts": {
-    "start": "node app.js"
+    "start": "node src/app.js"
   }
 }
