@@ -1,0 +1,17 @@
+{
+  "name": "vibration-detector",
+  "description": "Does it vibrate?",
+  "engines": {
+    "node": "8.11.x",
+    "npm": ">=5.6.0"
+  },
+  "dependencies": {
+    "express": "4.16.4",
+    "body-parser": "1.18.3",
+    "moment": "2.24.0",
+    "lodash": "4.17.11"
+  },
+  "scripts": {
+    "start": "node app.js"
+  }
+}
