@@ -1,0 +1,6 @@
+version: '3'
+services:
+    foosball-monitor:
+        image: registry.son/szygi-foosball-monitor:master
+        ports:
+            - 3000:3000
