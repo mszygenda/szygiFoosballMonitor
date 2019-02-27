@@ -1,10 +1,10 @@
 const moment = require('moment');
 const _ = require('lodash');
 
-const threshold = 5;
-const measuringDuration = moment.duration(30, 'seconds');
-const minimumPoints = 10;
-const maximumHistory = 10000;
+const MEASUREMENT_DURATION = moment.duration(60, 'seconds');
+const DEVIATION_THRESHOLD = 5;
+const MINIMUM_POINTS = 20;
+const MAXIMUM_HISTORY_SIZE = 10000;
 
 let values = [];
 
@@ -15,7 +15,7 @@ const VibrationService = {
 
     values = _.takeRight(
       _.concat(values, [{date, value}]),
-      maximumHistory
+      MAXIMUM_HISTORY_SIZE
     );
   },
   getPositionsAfter(afterDate) {
@@ -23,10 +23,10 @@ const VibrationService = {
   },
   isVibrating() {
     const measuredPositions = this.getPositionsAfter(
-      moment().subtract(measuringDuration)
+      moment().subtract(MEASUREMENT_DURATION)
     );
 
-    if (measuredPositions.length < minimumPoints) {
+    if (measuredPositions.length < MINIMUM_POINTS) {
       console.log("NOT enough points for checking if it vibrates");
       return false;
     }
@@ -34,7 +34,7 @@ const VibrationService = {
     const stdDev = this.getStandardDeviation(
       _.map(measuredPositions, ({value}) => value)
     );
-    const isVibrating = stdDev > threshold;
+    const isVibrating = stdDev > DEVIATION_THRESHOLD;
 
     console.log("Standard Deviation is", stdDev);
     console.log("Is vibrating:", isVibrating);
