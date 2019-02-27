@@ -2,7 +2,8 @@ const moment = require('moment');
 const _ = require('lodash');
 
 const MEASUREMENT_DURATION = moment.duration(60, 'seconds');
-const DEVIATION_THRESHOLD = 5;
+const DEVIATION_THRESHOLD = 3;
+const ABOVE_THRESHOLD_PERCENT = 0.5;
 const MINIMUM_POINTS = 20;
 const MAXIMUM_HISTORY_SIZE = 10000;
 
@@ -31,12 +32,10 @@ const VibrationService = {
       return false;
     }
 
-    const stdDev = this.getStandardDeviation(
-      _.map(measuredPositions, ({value}) => value)
-    );
-    const isVibrating = stdDev > DEVIATION_THRESHOLD;
+    const positionsAboveThreshold = _.filter(measuredPositions, ({value}) => value > DEVIATION_THRESHOLD);
+    const isVibrating = positionsAboveThreshold.length / measuredPositions.length > ABOVE_THRESHOLD_PERCENT;
 
-    console.log("Standard Deviation is", stdDev);
+    console.log("above threshold percent",  positionsAboveThreshold.length / measuredPositions.length);
     console.log("Is vibrating:", isVibrating);
 
     return isVibrating;
