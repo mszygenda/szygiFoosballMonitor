@@ -96,6 +96,26 @@ int read_delta() {
   return abs(second_value - first_value);
 }
 
+int read_max_delta2(int n) {
+  int max, min = analogRead(xPin);
+
+  for (int i = 0; i < n; i++) {
+    delay(50);
+    
+    int value = analogRead(xPin);
+
+    if (value < min) {
+      min = value;
+    }
+
+    if (value > max) {
+      max = value;
+    }
+  }
+
+  return abs(max - min);
+}
+
 void loop() {
   send_location(
     read_max_delta(10)

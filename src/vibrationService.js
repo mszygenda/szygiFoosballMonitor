@@ -2,7 +2,7 @@ const moment = require('moment');
 const _ = require('lodash');
 
 const MEASUREMENT_DURATION = moment.duration(60, 'seconds');
-const DEVIATION_THRESHOLD = 3;
+const DEVIATION_THRESHOLD = 6;
 const ABOVE_THRESHOLD_PERCENT = 0.5;
 const MINIMUM_POINTS = 20;
 const MAXIMUM_HISTORY_SIZE = 10000;
