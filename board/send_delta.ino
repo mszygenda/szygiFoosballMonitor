@@ -3,21 +3,59 @@
  */
 #include <ESP8266WiFi.h>
 #include <ESP8266HTTPClient.h>
-
+#include <TroykaAccelerometer.h>
 #ifndef STASSID
-#define STASSID "YOUR_SSID"
-#define STAPSK  "YOUR_PASSWORD"
-#define BASE_URL "http://YOUR_HOST:3000"
+#define STASSID "WIFI_NAME"
+#define STAPSK  "WIFI_PASS"
+#define BASE_URL "http://172.16.2.90:3000"
+#define LED D4
+
+#define THRESHOLD 6
+#define POSITIONS_ITERATIONS 30
+
+#define VIBRATION_ITERATIONS 30
+
+#define INIT_MODE 1
+#define LOW_POWER_MODE 2
+#define SEND_POSITIONS_MODE 3
+
+#define ACCELEROMETER_SENSOR 1
+#define VIBRATION_SENSOR 2
+
+#define MEASURING_LOOP_COUNT 50
+
 #endif
 
 const char* ssid     = STASSID;
 const char* password = STAPSK;
+const int sensor_type = VIBRATION_SENSOR;
 const int xPin = A0;    //x-axis of the Accelerometer 
+const int vibrationPin = D0;
+
+int mode = INIT_MODE;
 
 void setup() {
+  switch(sensor_type) {
+    case ACCELEROMETER_SENSOR:
+      accel__setup();
+      break;
+    case VIBRATION_SENSOR:
+      vibration__setup();
+      break;
+  }
   // initialize serial communications at 9600 bps:
-  Serial.begin(9600);
+  Serial.begin(9600);  
+}
 
+void accel__setup() {
+  
+}
+
+void vibration__setup() {
+  pinMode(vibrationPin, INPUT);
+}
+
+void enable_wifi() {
   Serial.print("Connecting to ");
   Serial.println(ssid);
 
@@ -42,7 +80,7 @@ void send_location(int value) {
   HTTPClient http;
   WiFiClient client;
 
-  Serial.print("[HTTP] Sending position..." + value);
+  Serial.println("[HTTP] Sending position..." + String(value));
 
   String body = String("{\"value\":" + String(value) + "}");
 
@@ -61,47 +99,13 @@ void send_location(int value) {
   }
 }
 
-int read_average_delta(int n) {
-  int sum = 0;
-
-  for (int i = 0; i < n; i++) {
-    int x = read_delta();
-    
-    sum += x;
-  }
-
-  return sum / n;
-}
-
-int read_max_delta(int n) {
-  int max = read_delta();
-
-  for (int i = 0; i < n; i++) {
-    int x = read_delta();
-    if (x > max) {
-      max = x;
-    }
-  }
-
-  return max;
-}
-
-int read_delta() {
-  int first_value = analogRead(xPin);
-
-  delay(100);
-  
-  int second_value = analogRead(xPin);
-
-  return abs(second_value - first_value);
-}
-
 int read_max_delta2(int n) {
-  int max, min = analogRead(xPin);
+  int value = analogRead(xPin);
+  int max = value, min = value;
 
   for (int i = 0; i < n; i++) {
     delay(50);
-    
+
     int value = analogRead(xPin);
 
     if (value < min) {
@@ -116,8 +120,137 @@ int read_max_delta2(int n) {
   return abs(max - min);
 }
 
-void loop() {
-  send_location(
-    read_max_delta(10)
-  );
+bool low_power_loop() {
+//   ESP.deepSleep(3e6);
+   delay(30000);
+   Serial.println("Checking for vibrations");
+
+   if (should_wake_up()) {
+      Serial.println("Vibrations detected. Waking up");
+      switch_mode(SEND_POSITIONS_MODE);
+   } else {
+      Serial.println("No vibrations. Continuuing deepSleep");
+   }
+}
+
+bool should_wake_up() {
+  switch(sensor_type) {
+    case ACCELEROMETER_SENSOR:
+      return accel__should_wake_up();
+    case VIBRATION_SENSOR:
+      return vibration__should_wake_up();
+  }
+}
+
+bool vibration__should_wake_up() {
+  return true;
+}
+
+bool accel__should_wake_up() {
+  int max = read_max_delta2(10);
+   
+   for (int i = 0; i < 10; i++) {
+    int value = read_max_delta2(20);
+    if (value > max) {
+      max = value;
+    }
+   }
+
+   return max > THRESHOLD;
+}
+
+void switch_mode(int newMode) {
+  mode = newMode;
+
+  switch(newMode) {
+    case SEND_POSITIONS_MODE:
+      Serial.println("Switching to SEND_POSITIONS_MODE");
+      enable_wifi();
+      break;
+    case LOW_POWER_MODE:
+      Serial.println("Switching to LOW_POWER_MODE");
+      disable_wifi();
+    default:
+      disable_wifi();
+      break;
+  }
+}
+
+void disable_wifi() {
+  Serial.println("Disabling wifi");
+  WiFi.mode(WIFI_OFF);
+}
+
+void send_positions_loop() {
+  switch(sensor_type) {
+    case VIBRATION_SENSOR:
+      return vibration__send_positions_loop();
+    case ACCELEROMETER_SENSOR:
+      return accel__send_positions_loop();
+  }
+}
+
+void accel__send_positions_loop() {
+  int sum = 0;
+
+  for (int i = 0; i < VIBRATION_ITERATIONS; i++) {
+    int value = read_max_delta2(20);
+
+    sum += value;
+    send_location(value);
+  }
+
+  int avg = sum / VIBRATION_ITERATIONS;
+
+  if (avg < THRESHOLD) {
+    //switch_mode(LOW_POWER_MODE);
+  }
+}
+
+void vibration__send_positions_loop() {
+  int sum = 0;
+
+  for (int i = 0; i < MEASURING_LOOP_COUNT; i++) {
+    if (is_vibrating()) {
+      sum++;
+      send_location(10);
+    }
+  }
+
+  double avg = sum / (double)MEASURING_LOOP_COUNT;
+
+  if (avg < 0.1) {
+    Serial.println("Should switch to low power mode" + String(avg));
+    switch_mode(LOW_POWER_MODE);
+  }
+}
+
+
+boolean is_vibrating() {
+  int vibrating_samples = 0;
+  
+  for (int i = 0; i < VIBRATION_ITERATIONS; i++) {
+    if(digitalRead(vibrationPin) == 1) {
+      vibrating_samples++;
+    }
+    
+    delay(50);
+  }
+
+  return vibrating_samples > 0;
+}
+
+void loop() {  
+  switch(mode) {
+    case INIT_MODE:
+      delay(5000);
+      switch_mode(SEND_POSITIONS_MODE);
+      break;
+    case LOW_POWER_MODE:
+      low_power_loop();
+      break;
+    case SEND_POSITIONS_MODE:
+      send_positions_loop();
+      break;
+  }
 }
