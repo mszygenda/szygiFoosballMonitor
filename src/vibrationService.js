@@ -27,6 +27,8 @@ const VibrationService = {
       moment().subtract(MEASUREMENT_DURATION)
     );
 
+    return measuredPositions.length > 3;
+
     if (measuredPositions.length < MINIMUM_POINTS) {
       console.log("NOT enough points for checking if it vibrates");
       return false;
@@ -42,6 +44,9 @@ const VibrationService = {
   },
   getLastPosition() {
     return _.last(values);
+  },
+  getRecentPositions() {
+    return _.reverse(_.clone(values));
   },
   getStandardDeviation(values) {
     const sum = _.sum(values);

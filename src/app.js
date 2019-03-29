@@ -9,8 +9,9 @@ app.use(bodyParser.json());
 app.get('/status', (req, res) => {
   res.send(JSON.stringify({
     isVibrating: vibrationService.isVibrating(),
-    lastPosition: vibrationService.getLastPosition()
-  }));
+    lastPosition: vibrationService.getLastPosition(),
+    recentPositions: vibrationService.getRecentPositions()
+  },null, 4));
 });
 
 app.post('/position', (req, res) => {

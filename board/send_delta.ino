@@ -3,9 +3,8 @@
  */
 #include <ESP8266WiFi.h>
 #include <ESP8266HTTPClient.h>
-#include <TroykaAccelerometer.h>
 #ifndef STASSID
-#define STASSID "WIFI_NAME"
+#define STASSID "WIFI_SSID"
 #define STAPSK  "WIFI_PASS"
 #define BASE_URL "http://172.16.2.90:3000"
 #define LED D4
@@ -30,7 +29,7 @@ const char* ssid     = STASSID;
 const char* password = STAPSK;
 const int sensor_type = VIBRATION_SENSOR;
 const int xPin = A0;    //x-axis of the Accelerometer 
-const int vibrationPin = D0;
+const int vibrationPin = D8;
 
 int mode = INIT_MODE;
 
@@ -122,6 +121,8 @@ int read_max_delta2(int n) {
 
 bool low_power_loop() {
 //   ESP.deepSleep(3e6);
+//   ESP.deepSleep(10 * 1000000);
+   
    delay(30000);
    Serial.println("Checking for vibrations");
 
@@ -143,7 +144,13 @@ bool should_wake_up() {
 }
 
 bool vibration__should_wake_up() {
-  return true;
+  for (int i = 0; i < 15; i++) {
+    if (is_vibrating()) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 bool accel__should_wake_up() {
@@ -170,6 +177,7 @@ void switch_mode(int newMode) {
     case LOW_POWER_MODE:
       Serial.println("Switching to LOW_POWER_MODE");
       disable_wifi();
+      break;
     default:
       disable_wifi();
       break;
@@ -219,7 +227,7 @@ void vibration__send_positions_loop() {
 
   double avg = sum / (double)MEASURING_LOOP_COUNT;
 
-  if (avg < 0.1) {
+  if (sum == 0) {
     Serial.println("Should switch to low power mode" + String(avg));
     switch_mode(LOW_POWER_MODE);
   }
