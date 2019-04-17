@@ -3,51 +3,54 @@
  */
 #include <ESP8266WiFi.h>
 #include <ESP8266HTTPClient.h>
+
 #ifndef STASSID
-#define STASSID "WIFI_SSID"
-#define STAPSK  "WIFI_PASS"
+#define STASSID "SSID"
+#define STAPSK  "PASSWORD"
 #define BASE_URL "http://172.16.2.90:3000"
 #define LED D4
-
-#define THRESHOLD 6
-#define POSITIONS_ITERATIONS 30
-
-#define VIBRATION_ITERATIONS 30
 
 #define INIT_MODE 1
 #define LOW_POWER_MODE 2
 #define SEND_POSITIONS_MODE 3
 
-#define ACCELEROMETER_SENSOR 1
-#define VIBRATION_SENSOR 2
-
-#define MEASURING_LOOP_COUNT 50
+#define VIBRATION_SENSOR 1
 
 #endif
 
 const char* ssid     = STASSID;
 const char* password = STAPSK;
 const int sensor_type = VIBRATION_SENSOR;
-const int xPin = A0;    //x-axis of the Accelerometer 
 const int vibrationPin = D8;
 
 int mode = INIT_MODE;
 
+int get_and_increment_boot_count() {
+  int boot_count = rtcmem.read32(0);
+
+  rtcmem.write32(0, boot_count + 1);
+
+  return boot_count;
+}
+
 void setup() {
+  int bootCount = get_and_increment_boot_count();
+  
+  if (bootCount == 0) {
+    Serial.println("Initial boot. Sleeping for 10 seconds");
+    delay(10000);
+  }
+  
+  bootCount++;
+
+  // initialize serial communications at 9600 bps:
+  Serial.begin(9600);  
+  
   switch(sensor_type) {
-    case ACCELEROMETER_SENSOR:
-      accel__setup();
-      break;
     case VIBRATION_SENSOR:
       vibration__setup();
       break;
   }
-  // initialize serial communications at 9600 bps:
-  Serial.begin(9600);  
-}
-
-void accel__setup() {
-  
 }
 
 void vibration__setup() {
@@ -98,72 +101,29 @@ void send_location(int value) {
   }
 }
 
-int read_max_delta2(int n) {
-  int value = analogRead(xPin);
-  int max = value, min = value;
-
-  for (int i = 0; i < n; i++) {
-    delay(50);
-
-    int value = analogRead(xPin);
-
-    if (value < min) {
-      min = value;
-    }
-
-    if (value > max) {
-      max = value;
-    }
-  }
-
-  return abs(max - min);
+bool low_power_loop() {
+   Serial.println("Going in deepSleep");
+   ESP.deepSleep(30 * 1000000);
 }
 
-bool low_power_loop() {
-//   ESP.deepSleep(3e6);
-//   ESP.deepSleep(10 * 1000000);
-   
-   delay(30000);
-   Serial.println("Checking for vibrations");
-
+void init_loop() {
    if (should_wake_up()) {
       Serial.println("Vibrations detected. Waking up");
       switch_mode(SEND_POSITIONS_MODE);
    } else {
-      Serial.println("No vibrations. Continuuing deepSleep");
+      switch_mode(LOW_POWER_MODE);
    }
 }
 
 bool should_wake_up() {
   switch(sensor_type) {
-    case ACCELEROMETER_SENSOR:
-      return accel__should_wake_up();
     case VIBRATION_SENSOR:
       return vibration__should_wake_up();
   }
 }
 
 bool vibration__should_wake_up() {
-  for (int i = 0; i < 15; i++) {
-    if (is_vibrating()) {
-      return true;
-    }
-  }
-
-  return false;
-}
-
-bool accel__should_wake_up() {
-  int max = read_max_delta2(10);
-   
-   for (int i = 0; i < 10; i++) {
-    int value = read_max_delta2(20);
-    if (value > max) {
-      max = value;
-    }
-   }
-
-   return max > THRESHOLD;
+   return is_vibrating(6000);
 }
 
 void switch_mode(int newMode) {
@@ -193,66 +153,35 @@ void send_positions_loop() {
   switch(sensor_type) {
     case VIBRATION_SENSOR:
       return vibration__send_positions_loop();
-    case ACCELEROMETER_SENSOR:
-      return accel__send_positions_loop();
-  }
-}
-
-void accel__send_positions_loop() {
-  int sum = 0;
-
-  for (int i = 0; i < VIBRATION_ITERATIONS; i++) {
-    int value = read_max_delta2(20);
-
-    sum += value;
-    send_location(value);
-  }
-
-  int avg = sum / VIBRATION_ITERATIONS;
-
-  if (avg < THRESHOLD) {
-    //switch_mode(LOW_POWER_MODE);
   }
 }
 
 void vibration__send_positions_loop() {
-  int sum = 0;
-
-  for (int i = 0; i < MEASURING_LOOP_COUNT; i++) {
-    if (is_vibrating()) {
-      sum++;
-      send_location(10);
-    }
-  }
-
-  double avg = sum / (double)MEASURING_LOOP_COUNT;
-
-  if (sum == 0) {
-    Serial.println("Should switch to low power mode" + String(avg));
-    switch_mode(LOW_POWER_MODE);
-  }
+  send_location(10);
+  switch_mode(LOW_POWER_MODE);
 }
 
 
-boolean is_vibrating() {
-  int vibrating_samples = 0;
+/**
+ * Checks if there's any vibration over period of 1 second
+ */
+boolean is_vibrating(int samplingPeriodMs) {
+  int samplingDelay = 50;
+  int iterations = samplingPeriodMs / samplingDelay;
   
-  for (int i = 0; i < VIBRATION_ITERATIONS; i++) {
+  for (int i = 0; i < iterations; i++) {
     if(digitalRead(vibrationPin) == 1) {
-      vibrating_samples++;
+      return true;
     }
     
-    delay(50);
+    delay(samplingDelay);
   }
-
-  return vibrating_samples > 0;
 }
 
-void loop() {  
+void loop() {
   switch(mode) {
     case INIT_MODE:
-      delay(5000);
-      switch_mode(SEND_POSITIONS_MODE);
+      init_loop();
       break;
     case LOW_POWER_MODE:
       low_power_loop();
